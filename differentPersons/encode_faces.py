@@ -7,7 +7,7 @@ import cv2
 import os
 import pandas as pd
 
-from differentPersons.function.function_dp import *
+from function.function_dp import *
 
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
@@ -22,6 +22,9 @@ args = vars(ap.parse_args())
 # array
 different_persons = []
 
+printDifferentPersons()
+maxPair = 1000  # maximalny pocet dvojic
+
 # grab the paths to the input images in our dataset
 print("[INFO] quantifying faces...")
 imagePaths = list(paths.list_images(args["dataset"]))
@@ -32,10 +35,13 @@ for (i, imagePath) in enumerate(imagePaths):
     print("[INFO] separation images {}/{}".format(i + 1,
                                                  len(imagePaths)))
 
+    if (len(different_persons) == maxPair):
+        break
+
     namePhoto = imagePath.split(os.path.sep)[-1]
 
-    valueId = df.loc[df["fotka"] == namePhoto]
-    nameID = valueId.id.item()
+    valueId = df.loc[df["image"] == namePhoto]
+    nameID = valueId.identity.item()
 
     for (j, imagePath2) in enumerate(imagePaths):
         namePhoto_2 = imagePath2.split(os.path.sep)[-1]
@@ -43,12 +49,12 @@ for (i, imagePath) in enumerate(imagePaths):
         if (namePhoto == namePhoto_2):
             continue
 
-        valueId_2 = df.loc[df["fotka"] == namePhoto_2]
-        nameID_2 = valueId_2.id.item()
+        valueId_2 = df.loc[df["image"] == namePhoto_2]
+        nameID_2 = valueId_2.identity.item()
 
         if (nameID != nameID_2):
-            if (len(different_persons) == 1000):
-                continue
+            if (len(different_persons) == maxPair):
+                break
             if ([namePhoto_2,namePhoto] not in different_persons):
                 different_persons.append([namePhoto, namePhoto_2])
                 appendToDifferentPersons(namePhoto,namePhoto_2)
@@ -98,7 +104,7 @@ for (i, person) in enumerate(different_persons):
             # encodings
             knownEncodings.append(encoding)
             knownNames.append(personByImagePath)
-
+            print("one")
         break
 
 # dump the facial encodings + names to disk
@@ -108,5 +114,5 @@ f = open(args["encodings"], "wb")
 f.write(pickle.dumps(data))
 f.close()
 
-# python encode_faces.py -i C:\Users\Lenovo\PycharmProjects\faceRecognition2\CelebA -e C:\Users\Lenovo\PycharmProjects\faceRecog
-# nition2\embeddings.pickle
+
+# python encode_faces.py -i C:\Users\Lenovo\PycharmProjects\faceRecognition3\Celeb -e C:\Users\Lenovo\PycharmProjects\faceRecognition3\differentPersons\embeddings.pickle

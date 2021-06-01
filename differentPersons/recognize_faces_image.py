@@ -19,14 +19,17 @@ ap.add_argument("-d", "--detection-method", type=str, default="cnn",
                 help="face detection model to use: either `hog` or `cnn`")
 args = vars(ap.parse_args())
 
+from function.function_dp import  *
 
 # array
 different_persons = []
 
 true_negative = 0
 false_positive = 0
-
 tolerance = 0.6
+
+# motion blur
+kernel_size = 20
 
 # grab the paths to the input images in our dataset
 print("[INFO] quantifying faces...")
@@ -37,11 +40,15 @@ print("[INFO] loading encodings...")
 data = pickle.loads(open(args["encodings"], "rb").read())
 print(data)
 
-# read from samePersons.txt the second columm
+# read from differentPersons.txt the second columm
 df = pandas.read_csv('differentPersons.txt',sep=" ")
 image_x = list(df['image_x'])
 image_y = list(df['image_y'])
-same_persons = np.column_stack((image_x,image_y))
+different_persons = np.column_stack((image_x,image_y))
+print(different_persons)
+
+#create new .text file
+printDifferentPersonsDistance()
 
 # loop over the image paths
 for (i, person) in enumerate(different_persons):
@@ -55,7 +62,6 @@ for (i, person) in enumerate(different_persons):
         # extract the person name from the image path
         # print("[INFO] processing image {}/{}".format(j + 1,
         #                                              len(imagePaths)))
-        name = "True"
 
         personByImagePath = imagePath.split(os.path.sep)[-1]
         if (personByImagePath != person[1]):
@@ -64,6 +70,21 @@ for (i, person) in enumerate(different_persons):
         print(personByImagePath,person[1])
         # load the input image and convert it from BGR to RGB
         image = cv2.imread(imagePath)
+
+        # edit size of photo
+        h, w, c = image.shape
+        if (h > 1000 or w > 1000):
+            width = 1000
+            height = 1000
+            dim = (width, height)
+            image = cv2.resize(image, dim)
+
+        # generating the kernel
+        kernel_motion_blur = np.zeros((kernel_size, kernel_size))
+        kernel_motion_blur[int((kernel_size - 1) / 2), :] = np.ones(kernel_size)
+        kernel_motion_blur = kernel_motion_blur / kernel_size
+        image = cv2.filter2D(image, -1, kernel_motion_blur)
+
         rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
         # detect the (x, y)-coordinates of the bounding boxes corresponding
@@ -75,45 +96,56 @@ for (i, person) in enumerate(different_persons):
         encodings = face_recognition.face_encodings(rgb, boxes)
         print(encodings)
 
-        # initialize the list of names for each face detected
-        names = []
+        if (len(encodings) == 0):
+            break
 
         # loop over the facial embeddings
         for encoding in encodings:
             # attempt to match each face in the input image to our known
             # encodings
-            distances = face_recognition.compare_faces(data["encodings"],encodings[0])
-            name = "False"
-            result = list(distances <= tolerance)
+            distances = face_recognition.face_distance(data["encodings"],encoding)
+            distance = distances[i]
+            print(distance)
 
+            # ak je v counts nasa person, kt. hladame je true
+            if (distance <= tolerance):
+                name = "True " + person[0]
+                true_negative += 1
+            else:
+                name = "False"
+                false_positive += 1
+
+            print(name)
+
+            # result = list(distances <= tolerance)
             # check to see if we have found a match
-            if True in result:
-                # find the indexes of all matched faces then initialize a
-                # dictionary to count the total number of times each face
-                # was matched
-                matchedIdxs = [i for (i, b) in enumerate(result) if b]
-                counts = {}
-
-                # loop over the matched indexes and maintain a count for
-                # each recognized face face
-                for i in matchedIdxs:
-                    name = data["names"][i]
-                    counts[name] = counts.get(name, 0) + 1
-
-                # determine the recognized face with the largest number of
-                # votes (note: in the event of an unlikely tie Python will
-                # select first entry in the dictionary)
-                # name = max(counts, key=counts.get)
-
-                # ak je v counts nasa person, kt. hladame je true
-                if (person[0] in counts):
-                    name = "True " + person[0]
-                    false_positive += 1
-                else:
-                    name = "False " + person[0]
-                    true_negative += 1
-
-                print(name)
+            # if True in result:
+            #     # find the indexes of all matched faces then initialize a
+            #     # dictionary to count the total number of times each face
+            #     # was matched
+            #     matchedIdxs = [i for (i, b) in enumerate(result) if b]
+            #     counts = {}
+            #
+            #     # loop over the matched indexes and maintain a count for
+            #     # each recognized face face
+            #     for i in matchedIdxs:
+            #         name = data["names"][i]
+            #         counts[name] = counts.get(name, 0) + 1
+            #
+            #     # determine the recognized face with the largest number of
+            #     # votes (note: in the event of an unlikely tie Python will
+            #     # select first entry in the dictionary)
+            #     # name = max(counts, key=counts.get)
+            #
+            #     # ak je v counts nasa person, kt. hladame je true
+            #     if (person[0] in counts):
+            #         name = "True " + person[0]
+            #         false_positive += 1
+            #     else:
+            #         name = "False " + person[0]
+            #         true_negative += 1
+            #
+            #     print(name)
 
                 # if (counts.has_key(person[0])):
                 #     name = person[0]
@@ -123,20 +155,26 @@ for (i, person) in enumerate(different_persons):
             # update the list of names
             # names.append(name)
 
-            # loop over the recognized faces
-            for top, right, bottom, left in boxes:
-                # draw the predicted face name on the image
-                cv2.rectangle(image, (left, top), (right, bottom), (0, 255, 0), 2)
-                y = top - 15 if top - 15 > 15 else top + 15
-                cv2.putText(image, name, (left, y), cv2.FONT_HERSHEY_SIMPLEX,
-                            0.75, (0, 255, 0), 2)
+            appendToDifferentPersonsDistance(person[0],person[1],str(distance))
 
-                # show the output image
-                cv2.imshow("Image", image)
-                cv2.waitKey(0)
+            # # loop over the recognized faces
+            # for top, right, bottom, left in boxes:
+            #     # draw the predicted face name on the image
+            #     cv2.rectangle(image, (left, top), (right, bottom), (0, 255, 0), 2)
+            #     y = top - 15 if top - 15 > 15 else top + 15
+            #     cv2.putText(image, name, (left, y), cv2.FONT_HERSHEY_SIMPLEX,
+            #                 0.75, (0, 255, 0), 2)
+            #
+            #     # show the output image
+            #     cv2.imshow("Image", image)
+            #     cv2.waitKey(0)
+
+            break
 
 print("true_negative " + str(true_negative))
 print("false_positive " + str(false_positive))
 
-# python recognize_faces_image.py -e C:\Users\Lenovo\PycharmProjects\faceRecognition2\embeddings.pickle -i C:\Users\Lenovo\Pychar
-# mProjects\faceRecognition2\019532.jpg
+# python recognize_faces_image.py -i C:\Users\Lenovo\PycharmProjects\faceRecognition3\Celeb -e C:\Users\Lenovo\PycharmProjects\faceRecognition3\differentPersons\embeddin
+#
+
+

@@ -19,6 +19,7 @@ ap.add_argument("-d", "--detection-method", type=str, default="cnn",
                 help="face detection model to use: either `hog` or `cnn`")
 args = vars(ap.parse_args())
 
+from samePersons.function.function_sp import *
 
 # array
 same_persons= []
@@ -42,6 +43,9 @@ df = pandas.read_csv('samePersons.txt',sep=" ")
 image_x = list(df['image_x'])
 image_y = list(df['image_y'])
 same_persons = np.column_stack((image_x,image_y))
+
+#create new .text file
+printSamePersonsDistance()
 
 # loop over the image paths
 for (i, person) in enumerate(same_persons):
@@ -84,8 +88,7 @@ for (i, person) in enumerate(same_persons):
         print(encodings)
 
         if (len(encodings) == 0):
-            distance = 1
-            distanceArray.append(distance)
+            break
 
         # loop over the facial embeddings
         for encoding in encodings:
@@ -97,7 +100,7 @@ for (i, person) in enumerate(same_persons):
             distance = distances[i]
 
             print(distance)
-            # ak je v counts nasa person, kt. hladame je true
+
             if (distance <= tolerance):
                 name = "True " + person[0]
                 true_positive += 1
@@ -136,8 +139,8 @@ for (i, person) in enumerate(same_persons):
             #
             #     print(name)
 
-            distanceArray.append(distance)
-            break
+            appendToSamePersonsDistance(person[0],person[1],str(distance))
+
             # # loop over the recognized faces
             # for top, right, bottom, left in boxes:
             #     # draw the predicted face name on the image
@@ -149,6 +152,7 @@ for (i, person) in enumerate(same_persons):
             #     # show the output image
             #     cv2.imshow("Image", image)
             #     cv2.waitKey(0)
+            break
 
 # df2 = pandas.DataFrame(df)
 # print(df2)
@@ -156,8 +160,8 @@ for (i, person) in enumerate(same_persons):
 # print(df2)
 # print(distanceArray)
 
-df['distances'] = distanceArray
-df.to_csv('samePersons.txt',sep=" ", index=None)
+# df['distances'] = distanceArray
+# df.to_csv('samePersons.txt',sep=" ", index=None)
 
 print("true_positive " + str(true_positive))
 print("false_negative " + str(false_negative))
